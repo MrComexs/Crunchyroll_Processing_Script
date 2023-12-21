@@ -12,14 +12,14 @@ yt_dlp_command="yt-dlp --all-subs --no-check-certificate --extractor-args crunch
 
 eval "$yt_dlp_command"
 
-#Makes series folder 
+# Makes series folder 
 for file in *.mp4; do
-  series_folder=$(echo "$file" | grep -oP ".*(Season \d).")
-  mkdir ../output/"$series_folder"
+    series_folder=$(echo "$file" | grep -oP ".*(Season \d).")
+    mkdir -p ../output/"$series_folder"
 done
 
 # Renames .mp4 and moves to Series folder
-  for file in *.mp4; do
+for file in *.mp4; do
     mv "$file" ./"$random_folder"
     cd ./"$random_folder"
     if [[ $file =~ \(Season\ ([0-9]+)\) ]]; then
@@ -28,17 +28,17 @@ done
         perl-rename 's/(.+?) Episode (\d+) – (.+?)(?: \[.*\])?\.mp4/sprintf("%s - S01E%02d ⌊%s⌉.mp4", $1, $2, $3)/e' *.mp4
     fi
 
-    for file in *.mp4; do
-        #ffmpeg -i "$file" -c:v libx265 -crf 20 -c:a copy ../output/"$series_folder"/"${file%.*}.mkv"
-        rm "$file"
+    for mp4file in *.mp4; do
+        #ffmpeg -i "$mp4file" -c:v libx265 -crf 20 -c:a copy ../output/"$series_folder"/"${mp4file%.*}.mkv"
+        rm "$mp4file"
     done
     cd ..
-  done
+done
 
 # Rename .ass files to only the last five characters and add S##E## from the mp4 filename
 find ./ -maxdepth 1 -type f -name "*.ass" -exec sed -i '/Original Script:/d' {} \;
 random_folder=".temp_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 8)"
-    mkdir -p "$random_folder"
+mkdir -p "$random_folder"
 
 for file in *.ass; do
     id_lang_code=$(echo "$file" | awk -F'[".]' '{print $(NF-1)}')
