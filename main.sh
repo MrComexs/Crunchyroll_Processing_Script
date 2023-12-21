@@ -50,7 +50,7 @@ for file in *.ass; do
     # Rename the file using rename and capture the output
     if [[ $remove_lang_code =~ \(Season\ ([0-9]+)\) ]]; then
         perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S%02dE%02d ⌊%s⌉.ass", $1, $2, $3, $4)/e' *.ass
-    elif [[ $remove_lang_code =~ Episode\ ([0-9]+)]]; then
+    elif [[ $remove_lang_code =~ Episode\ ([0-9]+) ]]; then
         perl-rename 's/(.+?) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S01E%02d ⌊%s⌉.ass", $1, $2, $3)/e' *.ass
     fi
 
