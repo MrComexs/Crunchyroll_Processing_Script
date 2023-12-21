@@ -31,8 +31,9 @@ done
     for file in *.mp4; do
         #ffmpeg -i "$file" -c:v libx265 -crf 20 -c:a copy ../output/"$series_folder"/"${file%.*}.mkv"
         rm "$file"
-    cd ..
     done
+    cd ..
+  done
 
 # Rename .ass files to only the last five characters and add S##E## from the mp4 filename
 find ./ -maxdepth 1 -type f -name "*.ass" -exec sed -i '/Original Script:/d' {} \;
