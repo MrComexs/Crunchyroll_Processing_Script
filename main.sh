@@ -22,9 +22,14 @@ for file in *.mp4; do
 done
 
 # Renames .mp4 and moves to Series folder
-    perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.mp4/sprintf("%s - S%02dE%02d ⌊%s⌉.mp4", $1, $2, $3, $4)/e' *.mp4
+    if
+        perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.mp4/sprintf("%s - S%02dE%02d ⌊%s⌉.mp4", $1, $2, $3, $4)/e' *.mp4
+    fi
+        perl-rename 's/(.+?) Episode (\d+) – (.+?)(?: \[.*\])?\.mp4/sprintf("%s - S01E%02d ⌊%s⌉.mp4", $1, $2, $3)/e' *.mp4
+
+
     for file in *.mp4; do
-        ffmpeg -i "$file" -c:v libx265 -crf 20 -c:a copy ../output/"$series_folder"/"${file%.*}.mkv"
+        #ffmpeg -i "$file" -c:v libx265 -crf 20 -c:a copy ../output/"$series_folder"/"${file%.*}.mkv"
         rm "$file"
     done
 
@@ -45,7 +50,12 @@ for file in *.ass; do
     
     # Rename the file using rename and capture the output
     cd ./"$random_folder"
-    perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S%02dE%02d ⌊%s⌉.ass", $1, $2, $3, $4)/e' *.ass
+    
+    if
+        perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S%02dE%02d ⌊%s⌉.ass", $1, $2, $3, $4)/e' *.ass
+    fi
+        perl-rename 's/(.+?) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S01E%02d ⌊%s⌉.ass", $1, $2, $3)/e' *.ass
+
     test_name=$(ls *.ass)
 
     # Add "_sub_" and the language code before the file extension
