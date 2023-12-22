@@ -39,7 +39,7 @@ cd "$raw_path"
 
 yt_dlp_command="yt-dlp --all-subs --no-check-certificate --extractor-args crunchyrollbeta:hardsub=none -f b --cookies-from-browser firefox --user-agent 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0' $video_link"
 
-#eval "$yt_dlp_command"
+eval "$yt_dlp_command"
 
 random_folder=".temp_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 8)"
 mkdir -p "$random_folder"
@@ -48,22 +48,27 @@ random_folder_path="$raw_path/$random_folder"
 # Make series folder 
 series_folder=""
 for file in *.mp4; do
-    if [[ "$file" =~ Season\ ([0-9]+) ]]; then
+    if [[ "$file" =~ \(Season\ ([0-9]+)\) ]]; then
+        # If file already contains "(Season #)", extract the season number
         season_ns=${BASH_REMATCH[1]}
+    elif [[ "$file" =~ Season\ ([0-9]+) ]]; then
+        # If file contains "Season #" without parentheses, extract the season number
+        season_ns=${BASH_REMATCH[1]}
+        # Add parentheses around the season number
         new_file=$(echo "$file" | sed "s/Season $season_ns/(Season $season_ns)/")
         mv "$file" "$new_file"
     else
         # If there is no season number, default to "S01"
         season_ns="01"
-    fi 
+    fi
 
     # Ensure season_ns has leading zero if less than 10
     season_ns=$(printf "%02d" "$season_ns")
 
     # Extract series name until "Season #" or "Episode"
-    series_name=$(echo "$file" | sed -E "s/( Season [0-9]+| Episode [0-9]+).*//i")
+    series_name=$(echo "$file" | sed -E "s/( Season [0-9]+| Episode [0-9]+| \(Season [0-9]+\)).*//i")
     
-    series_folder="${series_name} S${season_ns}"
+    series_folder="${series_name} - S${season_ns}"
 done
 
 mkdir -p ../output/"$series_folder"
@@ -92,12 +97,18 @@ cd "$raw_path"
 find ./ -maxdepth 1 -type f -name "*.ass" -exec sed -i '/Original Script:/d' {} \;
 
 for file in *.ass; do
-    if [[ "$file" =~ Season\ ([0-9]+) ]]; then
+    if [[ "$file" =~ \(Season\ ([0-9]+)\) ]]; then
+        # If file already contains "(Season #)", extract the season number
         season_ns=${BASH_REMATCH[1]}
+    elif [[ "$file" =~ Season\ ([0-9]+) ]]; then
+        # If file contains "Season #" without parentheses, extract the season number
+        season_ns=${BASH_REMATCH[1]}
+        # Add parentheses around the season number
         new_file=$(echo "$file" | sed "s/Season $season_ns/(Season $season_ns)/")
         mv "$file" "$new_file"
     fi
 done
+
 
 
 
@@ -124,5 +135,3 @@ for file in *.ass; do
 done
 
 rm -r "$random_folder_path"
-
- 
