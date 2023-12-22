@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# check if required_packages are installed
+required_packages=("ffmpeg" "yt-dlp" "perl-rename" "mkvmerge")
+
+for package in "${required_packages[@]}"; do
+    if ! command -v "$package" &> /dev/null; then
+        echo
+        echo "Error: $package is not installed."
+
+        read -p "Do you want to continue? (y/n): " answer
+        case "$answer" in
+            [yY]|[yY][eE][sS])
+                echo
+                ;;
+            *)
+                echo "Exiting the script."
+                echo
+                exit 1
+                ;;
+        esac
+    fi
+done
+
 read -p "Enter the video link: " video_link
 
 if [ -z "$video_link" ]; then
@@ -7,51 +29,109 @@ if [ -z "$video_link" ]; then
     exit 1
 fi
 
-cd ./raw
-yt_dlp_command="yt-dlp --all-subs --no-check-certificate --extractor-args crunchyrollbeta:hardsub=none -f b --cookies ./cookies-crunchyroll-com.txt $video_link"
+root_path=$(pwd)
+raw_path="$root_path/raw"
+output_path="$root_path/output"
 
-echo "Executing the following command:"
-echo "$yt_dlp_command"
+mkdir "$output_path"
+mkdir "$raw_path"
+cd "$raw_path"
+
+yt_dlp_command="yt-dlp --all-subs --no-check-certificate --extractor-args crunchyrollbeta:hardsub=none -f b --cookies-from-browser firefox --user-agent 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0' $video_link"
+
 eval "$yt_dlp_command"
-echo
 
-#Makes series folder 
+random_folder=".temp_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 8)"
+mkdir -p "$random_folder"
+random_folder_path="$raw_path/$random_folder"
+
+# Make series folder 
+series_folder=""
 for file in *.mp4; do
-  series_folder=$(echo "$file" | grep -oP ".*(Season \d).")
-  mkdir ../output/"$series_folder"
+    if [[ "$file" =~ \(Season\ ([0-9]+)\) ]]; then
+        # If file already contains "(Season #)", extract the season number
+        season_ns=${BASH_REMATCH[1]}
+    elif [[ "$file" =~ Season\ ([0-9]+) ]]; then
+        # If file contains "Season #" without parentheses, extract the season number
+        season_ns=${BASH_REMATCH[1]}
+        # Add parentheses around the season number
+        new_file=$(echo "$file" | sed "s/Season $season_ns/(Season $season_ns)/")
+        mv "$file" "$new_file"
+    else
+        # If there is no season number, default to "S01"
+        season_ns="01"
+    fi
+
+    # Ensure season_ns has leading zero if less than 10
+    season_ns=$(printf "%02d" "$season_ns")
+
+    # Extract series name until "Season #" or "Episode"
+    series_name=$(echo "$file" | sed -E "s/( Season [0-9]+| Episode [0-9]+| \(Season [0-9]+\)).*//i")
+    
+    series_folder="${series_name} - S${season_ns}"
 done
 
-# Renames .mp4 and moves to Series folder
-    perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.mp4/sprintf("%s - S%02dE%02d ⌊%s⌉.mp4", $1, $2, $3, $4)/e' *.mp4
-    for file in *.mp4; do
-        ffmpeg -i "$file" -c:v libx265 -crf 20 -c:a copy ../output/"$series_folder"/"${file%.*}.mkv"
-        rm "$file"
+mkdir -p ../output/"$series_folder"
+series_folder_path="$output_path"/"$series_folder"
+
+# Process video files
+for file in *.mp4; do
+    cd "$raw_path"
+    mv "$raw_path"/"$file" "$random_folder_path"
+    cd "$random_folder_path"
+    if [[ $file =~ \(Season\ ([0-9]+)\) ]]; then
+        perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.mp4/sprintf("%s - S%02dE%02d ⌊%s⌉.mp4", $1, $2, $3, $4)/e' *.mp4
+    elif [[ $file =~ Episode\ ([0-9]+) ]]; then
+        perl-rename 's/(.+?) Episode (\d+) – (.+?)(?: \[.*\])?\.mp4/sprintf("%s - S01E%02d ⌊%s⌉.mp4", $1, $2, $3)/e' *.mp4
+    fi
+
+    for mp4file in *.mp4; do
+        ffmpeg -i "$random_folder_path"/"$mp4file" -c:v libx265 -crf 20 -c:a copy "$series_folder_path"/"${mp4file%.*}.mkv"
+        rm "$random_folder_path"/"$mp4file"
     done
+done
+
 
 # Rename .ass files to only the last five characters and add S##E## from the mp4 filename
+cd "$raw_path"
 find ./ -maxdepth 1 -type f -name "*.ass" -exec sed -i '/Original Script:/d' {} \;
-random_folder=".temp_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 8)"
-    mkdir -p "$random_folder"
 
 for file in *.ass; do
-    # Extract language code within double quotes using awk
-    language_code=$(echo "$file" | awk -F'[".]' '{print $(NF-1)}')
+    if [[ "$file" =~ \(Season\ ([0-9]+)\) ]]; then
+        # If file already contains "(Season #)", extract the season number
+        season_ns=${BASH_REMATCH[1]}
+    elif [[ "$file" =~ Season\ ([0-9]+) ]]; then
+        # If file contains "Season #" without parentheses, extract the season number
+        season_ns=${BASH_REMATCH[1]}
+        # Add parentheses around the season number
+        new_file=$(echo "$file" | sed "s/Season $season_ns/(Season $season_ns)/")
+        mv "$file" "$new_file"
+    fi
+done
 
-    # Remove the ".de-" part and retain the dot before "ass"
-    modified_name=$(echo "$file" | sed 's/\(\.[a-z]\{2\}-[^.]*\)\(\.\)/\2/')
 
-    # Move the file to the modified name
-    mv "$file" ./"$random_folder"/"$modified_name"
-    
+
+
+for file in *.ass; do
+    id_lang_code=$(echo "$file" | awk -F'[".]' '{print $(NF-1)}')
+    remove_lang_code=$(echo "$file" | sed 's/\(\.[a-z]\{2\}-[^.]*\)\(\.\)/\2/')
+
+    # Moves the file to random folder and also removes language code
+    mv "$raw_path"/"$file" "$random_folder_path"/"$remove_lang_code"
+    cd "$random_folder_path"
+
     # Rename the file using rename and capture the output
-    cd ./"$random_folder"
-    perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S%02dE%02d ⌊%s⌉.ass", $1, $2, $3, $4)/e' *.ass
+    if [[ $remove_lang_code =~ \(Season\ ([0-9]+)\) ]]; then
+        perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S%02dE%02d ⌊%s⌉.ass", $1, $2, $3, $4)/e' *.ass
+    elif [[ $remove_lang_code =~ Episode\ ([0-9]+) ]]; then
+        perl-rename 's/(.+?) Episode (\d+) – (.+) \[.*\]\.ass/sprintf("%s - S01E%02d ⌊%s⌉.ass", $1, $2, $3)/e' *.ass
+    fi
+
     test_name=$(ls *.ass)
 
     # Add "_sub_" and the language code before the file extension
-    new_name="${test_name%.ass} sub ${language_code}.ass"
-    mv "$test_name" ../../output/"$series_folder"/"$new_name"
-    cd ..
+    new_name="${test_name%.ass} sub ${id_lang_code}.ass"
+    mv "$random_folder_path"/"$test_name" "$series_folder_path"/"$new_name"
 done
 
-rm -r "$random_folder"
+rm -r "$random_folder_path"
