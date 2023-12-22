@@ -52,25 +52,24 @@ for file in *.mp4; do
         season_ns=${BASH_REMATCH[1]}
         new_file=$(echo "$file" | sed "s/Season $season_ns/(Season $season_ns)/")
         mv "$file" "$new_file"
-
-        series_title=$(echo "$new_file" | grep -oP "^(.*?)(?:Season|\(\d+\))?\s*Episode" | sed 's/ $//')
-        rm_ep_series_title=$(echo "$series_title" | sed 's/ Episode.*//')
-
-        # Extract season number from the modified filename
-        season_number=$(echo "$new_file" | grep -oP "(?:Season|\(\d+\))" | grep -oP "\d+" | head -n 1)
     else
-        # If "Season" is not present, set a default season number
-        season_number="01"
-        rm_ep_series_title=$(echo "$file" | grep -oP "^(.*?)(?:Season|\(\d+\))?\s*Episode" | sed 's/ $//')
-    fi
+        # If there is no season number, default to "S01"
+        season_ns="01"
+    fi 
 
-    # If no season number is found, assume it's Season 1
-    if [ -z "$season_number" ]; then
-        season_number="01"
-    fi
+    # Ensure season_ns has leading zero if less than 10
+    season_ns=$(printf "%02d" "$season_ns")
 
-    absolute_series_title=$(echo "$rm_ep_series_title" | sed 's/ Season.*//')
-    series_folder="$absolute_series_title S$season_number"
+    # Extract series name until "Season #" or "Episode"
+    series_name=$(echo "$file" | sed -E "s/( Season [0-9]+| Episode [0-9]+).*//i")
+    
+    series_folder="${series_name} S${season_ns}"
+    
+    echo
+    echo -e "\e[1;32m$series_name\e[0m"
+    echo -e "\e[1;32m$series_folder\e[0m"
+    echo -e "\e[1;32m$season_ns\e[0m"
+    echo
 done
 
 mkdir -p ../output/"$series_folder"
@@ -131,3 +130,5 @@ for file in *.ass; do
 done
 
 rm -r "$random_folder_path"
+
+ 
