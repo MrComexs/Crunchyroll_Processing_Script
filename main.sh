@@ -64,12 +64,6 @@ for file in *.mp4; do
     series_name=$(echo "$file" | sed -E "s/( Season [0-9]+| Episode [0-9]+).*//i")
     
     series_folder="${series_name} S${season_ns}"
-    
-    echo
-    echo -e "\e[1;32m$series_name\e[0m"
-    echo -e "\e[1;32m$series_folder\e[0m"
-    echo -e "\e[1;32m$season_ns\e[0m"
-    echo
 done
 
 mkdir -p ../output/"$series_folder"
