@@ -18,7 +18,7 @@ This is a bash script that automates the process of ripping an anime from Crunch
 - ffmpeg
 - perl-rename
 <!-- mkvmerge `v2.0`-->
-2. Download the the main.sh from the Release page.
+2. Download the the main.sh from the [Release page](https://github.com/MrComexs/Crunchyroll_Processing_Script/releases).
 - or `git clone` repo
 3. Run script
 ```bash
