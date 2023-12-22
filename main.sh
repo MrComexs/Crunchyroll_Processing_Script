@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# check if required_packages are installed
+required_packages=("ffmpeg" "yt-dlp" "perl-rename" "mkvmerge")
+
+for package in "${required_packages[@]}"; do
+    if ! command -v "$package" &> /dev/null; then
+        echo
+        echo "Error: $package is not installed."
+
+        read -p "Do you want to continue? (y/n): " answer
+        case "$answer" in
+            [yY]|[yY][eE][sS])
+                echo
+                ;;
+            *)
+                echo "Exiting the script."
+                echo
+                exit 1
+                ;;
+        esac
+    fi
+done
+
 read -p "Enter the video link: " video_link
 
 if [ -z "$video_link" ]; then
@@ -7,21 +29,58 @@ if [ -z "$video_link" ]; then
     exit 1
 fi
 
-cd ./raw
-yt_dlp_command="yt-dlp --all-subs --no-check-certificate --extractor-args crunchyrollbeta:hardsub=none -f b --cookies ./cookies-crunchyroll-com.txt $video_link"
+root_path=$(pwd)
+raw_path="$root_path/raw"
+output_path="$root_path/output"
 
-eval "$yt_dlp_command"
+mkdir "$output_path"
+mkdir "$raw_path"
+cd "$raw_path"
 
-# Makes series folder 
+yt_dlp_command="yt-dlp --all-subs --no-check-certificate --extractor-args crunchyrollbeta:hardsub=none -f b --cookies-from-browser firefox --user-agent 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0' $video_link"
+
+#eval "$yt_dlp_command"
+
+random_folder=".temp_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 8)"
+mkdir -p "$random_folder"
+random_folder_path="$raw_path/$random_folder"
+
+# Make series folder 
+series_folder=""
 for file in *.mp4; do
-    series_folder=$(echo "$file" | grep -oP ".*(Season \d).")
-    mkdir -p ../output/"$series_folder"
+    if [[ "$file" =~ Season\ ([0-9]+) ]]; then
+        season_ns=${BASH_REMATCH[1]}
+        new_file=$(echo "$file" | sed "s/Season $season_ns/(Season $season_ns)/")
+        mv "$file" "$new_file"
+
+        series_title=$(echo "$new_file" | grep -oP "^(.*?)(?:Season|\(\d+\))?\s*Episode" | sed 's/ $//')
+        rm_ep_series_title=$(echo "$series_title" | sed 's/ Episode.*//')
+
+        # Extract season number from the modified filename
+        season_number=$(echo "$new_file" | grep -oP "(?:Season|\(\d+\))" | grep -oP "\d+" | head -n 1)
+    else
+        # If "Season" is not present, set a default season number
+        season_number="01"
+        rm_ep_series_title=$(echo "$file" | grep -oP "^(.*?)(?:Season|\(\d+\))?\s*Episode" | sed 's/ $//')
+    fi
+
+    # If no season number is found, assume it's Season 1
+    if [ -z "$season_number" ]; then
+        season_number="01"
+    fi
+
+    absolute_series_title=$(echo "$rm_ep_series_title" | sed 's/ Season.*//')
+    series_folder="$absolute_series_title S$season_number"
 done
 
-# Renames .mp4 and moves to Series folder
+mkdir -p ../output/"$series_folder"
+series_folder_path="$output_path"/"$series_folder"
+
+# Process video files
 for file in *.mp4; do
-    mv "$file" ./"$random_folder"
-    cd ./"$random_folder"
+    cd "$raw_path"
+    mv "$raw_path"/"$file" "$random_folder_path"
+    cd "$random_folder_path"
     if [[ $file =~ \(Season\ ([0-9]+)\) ]]; then
         perl-rename 's/(.+?) \(Season (\d+)\) Episode (\d+) – (.+) \[.*\]\.mp4/sprintf("%s - S%02dE%02d ⌊%s⌉.mp4", $1, $2, $3, $4)/e' *.mp4
     elif [[ $file =~ Episode\ ([0-9]+) ]]; then
@@ -29,24 +88,33 @@ for file in *.mp4; do
     fi
 
     for mp4file in *.mp4; do
-        #ffmpeg -i "$mp4file" -c:v libx265 -crf 20 -c:a copy ../output/"$series_folder"/"${mp4file%.*}.mkv"
-        rm "$mp4file"
+        ffmpeg -i "$random_folder_path"/"$mp4file" -c:v libx265 -crf 20 -c:a copy "$series_folder_path"/"${mp4file%.*}.mkv"
+        rm "$random_folder_path"/"$mp4file"
     done
-    cd ..
 done
 
+
 # Rename .ass files to only the last five characters and add S##E## from the mp4 filename
+cd "$raw_path"
 find ./ -maxdepth 1 -type f -name "*.ass" -exec sed -i '/Original Script:/d' {} \;
-random_folder=".temp_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 8)"
-mkdir -p "$random_folder"
+
+for file in *.ass; do
+    if [[ "$file" =~ Season\ ([0-9]+) ]]; then
+        season_ns=${BASH_REMATCH[1]}
+        new_file=$(echo "$file" | sed "s/Season $season_ns/(Season $season_ns)/")
+        mv "$file" "$new_file"
+    fi
+done
+
+
 
 for file in *.ass; do
     id_lang_code=$(echo "$file" | awk -F'[".]' '{print $(NF-1)}')
     remove_lang_code=$(echo "$file" | sed 's/\(\.[a-z]\{2\}-[^.]*\)\(\.\)/\2/')
 
     # Moves the file to random folder and also removes language code
-    mv "$file" ./"$random_folder"/"$remove_lang_code"
-    cd ./"$random_folder"
+    mv "$raw_path"/"$file" "$random_folder_path"/"$remove_lang_code"
+    cd "$random_folder_path"
 
     # Rename the file using rename and capture the output
     if [[ $remove_lang_code =~ \(Season\ ([0-9]+)\) ]]; then
@@ -59,8 +127,7 @@ for file in *.ass; do
 
     # Add "_sub_" and the language code before the file extension
     new_name="${test_name%.ass} sub ${id_lang_code}.ass"
-    mv "$test_name" ../../output/"$series_folder"/"$new_name"
-    cd ..
+    mv "$random_folder_path"/"$test_name" "$series_folder_path"/"$new_name"
 done
 
-rm -r "$random_folder"
+rm -r "$random_folder_path"
